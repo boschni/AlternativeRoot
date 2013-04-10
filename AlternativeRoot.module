@@ -1,0 +1,86 @@
+<?php
+
+/**
+ *
+ * AlternativeRoot module for Processwire
+ * (C) 2013 Niek Bosch, De Media Fabriek
+ *
+ * ProcessWire 2.x
+ * Copyright (C) 2013 by Ryan Cramer
+ * Licensed under GNU/GPL v2, see LICENSE.TXT
+ *
+ * http://www.processwire.com
+ * http://www.ryancramer.com
+ *
+ */
+
+class AlternativeRoot extends WireData implements Module, ConfigurableModule {
+
+	public static function getModuleInfo() {
+
+		return array(
+			'title' => 'AlternativeRoot',
+			'version' => 001,
+			'summary' => 'This module allows you to set an alternative root page.',
+			'singular' => true,
+			'autoload' => true,
+			);
+	}
+
+	public function init() {
+
+		// get root page
+		$this->root = $this->pages->get($this->root_page_id);
+
+		if ($this->root->id) {
+
+			// get the requested path
+			$path = (isset($_GET['it'])) ? ltrim($_GET['it'], '/') : '';
+
+			// get the first part
+			$firstPathPart = current(explode('/', $path));
+
+			// get the first path part page
+			$firstPathPartPage = $this->pages->get('/')->children('name=' . $firstPathPart . ',include=hidden')->first();
+
+			if ( ! $firstPathPartPage || $firstPathPartPage->id === $this->root->id) {
+
+				// change path like /about-us/ to /en/about-us/
+				$_GET['it'] = ($path !== '') ? '/' . $this->root->name . '/' . $path : $this->root->path;
+			}
+
+			// hook for path method to make path() and url() methods context aware
+			$this->addHookAfter('Page::path', $this, 'modifyPath');
+		}
+	}
+
+	public function modifyPath($event) {
+
+		$name = $this->root->name;
+
+		if (substr($event->return, 1, strlen($name) + 1) === $name . '/') {
+			$event->return = substr($event->return, strlen($name) + 1);
+		}
+	}
+
+	static public function getModuleConfigInputfields(array $data) {
+
+		$fields = new InputfieldWrapper();
+
+		$field = wire('modules')->get('InputfieldSelect');
+		$field->attr('name', 'root_page_id');
+		$field->attr('value', isset($data['root_page_id']) ? (int) $data['root_page_id'] : 0);
+		$field->label = __('Alternative root page');
+		$field->description = __('Select the alternative root page.');
+		$field->required = true;
+		$field->addOption('', '');
+
+		foreach (wire('pages')->find('parent=/') as $item) {
+			$field->addOption($item->id, $item->name);
+		}
+
+		$fields->append($field);
+
+		return $fields;
+	}
+}
